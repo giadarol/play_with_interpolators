@@ -8,6 +8,7 @@ from TricubicInterpolation import tricubic_interpolation as ti
 
 import PyPIC.PyPIC_Scatter_Gather as PyPICSC
 import PyPIC.geom_impact_poly as poly
+from PyPIC.MultiGrid import AddInternalGrid
 
 ob = mfm.myloadmat_to_obj('pinch_cut.mat')
 
@@ -17,6 +18,11 @@ interp2d = True
 i_slice = 250
 z_obs = ob.zg[i_slice]
 
+x_magnify = 5e-4
+y_magnify = 4.5e-4
+Dh_magnify = 2e-6
+
+
 if interp2d:
     for kk, zz in enumerate(ob.zg):
         ob.rho[kk, :, :] = ob.rho[i_slice, :, :]
@@ -25,11 +31,12 @@ if interp2d:
         ob.Ey[kk, :, :] = ob.Ey[i_slice, :, :]
 
 
-# Interpolation
-tinterp = ti.Tricubic_Interpolation(A=ob.phi.transpose(1,2,0), x0=ob.xg[0], y0=ob.yg[0], z0=ob.zg[0],
+# Interpolation on initial grid
+tinterp = ti.Tricubic_Interpolation(A=ob.phi.transpose(1,2,0)[:, :, i_slice-5:i_slice+6], 
+        x0=ob.xg[0], y0=ob.yg[0], z0=ob.zg[i_slice-5],
         dx=ob.xg[1]-ob.xg[0], dy=ob.yg[1]-ob.yg[0], dz=ob.zg[1]-ob.zg[0])
 
-x_tint = np.linspace(-5e-4, 5e-4, 1000)
+x_tint = np.linspace(-4.5e-4, 4.5e-4, 1000)
 y_tint = 0.*x_tint
 z_tint = 0.*x_tint + z_obs
 
@@ -41,7 +48,6 @@ for ii, (xx, yy, zz) in enumerate(zip(x_tint, y_tint, z_tint)):
     Ex_tint[ii] = -tinterp.ddx(xx, yy, zz)
 
 # 2D PIC
-
 assert((ob.xg[1] - ob.xg[0]) == (ob.yg[1] - ob.yg[0]))
 na = np.array
 chamb = poly.polyg_cham_geom_object({'Vx':na([ob.xg[-1], ob.xg[0], ob.xg[0], ob.xg[-1]]),
@@ -54,15 +60,39 @@ pic.phi = ob.phi[i_slice, :, :]
 pic.efx = ob.Ex[i_slice, :, :]
 pic.efy = ob.Ey[i_slice, :, :]
 pic.rho = ob.rho[i_slice, :, :]
+pic.chamb = chamb
 
 Ex_picint, _ = pic.gather(x_tint, y_tint)
 
-####
-#ob_rho_interp = scipy.interpolate.interp2d(ob.xg, ob.yg, ob.rho.T)
 
+# Internal pic
+picdg = AddInternalGrid(pic, 
+        x_min_internal=-x_magnify,
+        x_max_internal=x_magnify, 
+        y_min_internal=-y_magnify, 
+        y_max_internal=y_magnify, 
+        Dh_internal=Dh_magnify, 
+        N_nodes_discard = 10)
+picinside = picdg.pic_internal 
 
-#####
+picinside.rho = np.reshape(pic.gather_rho(picinside.xn, picinside.yn),
+        (picinside.Nxg, picinside.Nyg))
+picinside.solve(flag_verbose = True, pic_external=pic)
 
+rho_insideint = picinside.gather_rho(x_tint, y_tint)
+Ex_inside, _= picinside.gather(x_tint, y_tint)
+
+# Tricubic on internal pic
+tinterp_inside = ti.Tricubic_Interpolation(A=na(tinterp.A.shape[2]*[picinside.phi]).transpose(1,2,0), 
+        x0=picinside.xg[0], y0=picinside.yg[0], z0=-tinterp.A.shape[2]/2.,
+        dx=picinside.xg[1]-picinside.xg[0], dy=picinside.yg[1]-picinside.yg[0], dz=1.)
+
+phi_tinside = 0.*x_tint
+Ex_tinside = 0.*x_tint
+
+for ii, (xx, yy, zz) in enumerate(zip(x_tint, y_tint, z_tint)):
+    phi_tinside[ii] = tinterp_inside.val(xx, yy, zz)
+    Ex_tinside[ii] = -tinterp_inside.ddx(xx, yy, zz)
 
 # Plotting
 plt.close('all')
@@ -85,7 +115,9 @@ ax31 = fig3.add_subplot(3,1,1, sharex=ax1)
 ax32 = fig3.add_subplot(3,1,2, sharex=ax31)
 ax33 = fig3.add_subplot(3,1,3, sharex=ax31)
 
-ax31.plot(ob.xg, ob.rho[i_slice, :, j_obs], '.-')
+ax31.plot(ob.xg, ob.rho[i_slice, :, j_obs], '.')
+ax31.plot(x_tint, rho_insideint, 'kx--')
+
 ax32.plot(ob.xg, ob.phi[i_slice, :, j_obs],'.-')
 ax33.plot(ob.xg, ob.Ex[i_slice, :, j_obs], '.')
 
@@ -93,6 +125,7 @@ ax32.plot(x_tint, phi_tint,'r-')
 
 ax33.plot(x_tint, Ex_tint, 'r-')
 ax33.plot(x_tint, Ex_picint, 'g--')
-
+ax33.plot(x_tint, Ex_inside, 'k')
+ax33.plot(x_tint, Ex_tinside, 'orange')
 
 plt.show()
