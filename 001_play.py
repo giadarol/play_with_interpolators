@@ -3,34 +3,34 @@ import matplotlib.pyplot as plt
 import scipy.io as sio
 
 import myfilemanager as mfm
+import mystyle as ms
+from TricubicInterpolation import tricubic_interpolation as ti
 
-try:
-    del ob
-except:
-    print('Did not manage to delete...')
-
-ob = mfm.myloadmat_to_obj('pinch_pic_data_mean2.mat')
-
-i_zero = np.argmin(np.abs(ob.xg))
-j_zero = np.argmin(np.abs(ob.yg))
-
-N_keep_h = 100
-N_keep_v = 90
-
-dict_new_file = {}
-dict_new_file['Ex' ] = ob.Ex[:, i_zero-N_keep_h:i_zero+N_keep_h+1, j_zero-N_keep_v:j_zero+N_keep_v+1] 
-dict_new_file['Ey' ] = ob.Ey[:, i_zero-N_keep_h:i_zero+N_keep_h+1, j_zero-N_keep_v:j_zero+N_keep_v+1] 
-dict_new_file['phi'] = ob.phi[:, i_zero-N_keep_h:i_zero+N_keep_h+1, j_zero-N_keep_v:j_zero+N_keep_v+1] 
-dict_new_file['rho'] = ob.rho[:, i_zero-N_keep_h:i_zero+N_keep_h+1, j_zero-N_keep_v:j_zero+N_keep_v+1] 
-dict_new_file['xg' ] = ob.xg[i_zero-N_keep_h:i_zero+N_keep_h+1] 
-dict_new_file['yg' ] = ob.yg[j_zero-N_keep_v:j_zero+N_keep_v+1]
-dict_new_file['zg' ] = ob.zg
+ob = mfm.myloadmat_to_obj('pinch_cut.mat')
 
 
 i_slice = 250
+z_obs = ob.zg[i_slice]
+
+# Interpolation
+tinterp = ti.Tricubic_Interpolation(A=ob.phi.transpose(1,2,0), x0=ob.xg[0], y0=ob.yg[0], z0=ob.zg[0],
+        dx=ob.xg[1]-ob.xg[0], dy=ob.yg[1]-ob.yg[0], dz=ob.zg[1]-ob.zg[0])
+
+x_tint = np.linspace(-5e-4, 5e-4, 1000)
+y_tint = 0.*x_tint
+z_tint = 0.*x_tint + z_obs
+
+phi_tint = 0.*x_tint
+Ex_tint = 0.*x_tint
+
+for ii, (xx, yy, zz) in enumerate(zip(x_tint, y_tint, z_tint)):
+    phi_tint[ii] = tinterp.val(xx, yy, zz)
+    Ex_tint[ii] = -tinterp.ddx(xx, yy, zz)
 
 
+# Plotting
 plt.close('all')
+ms.mystyle_arial()
 ax1 =  None
 # fig1 = plt.figure(1)
 # ax1 = fig1.add_subplot(1,1,1)
@@ -44,13 +44,17 @@ y_obs = 0.
 j_obs = np.argmin(np.abs(ob.yg - y_obs))
 
 fig3 = plt.figure(3)
+fig3.set_facecolor('w')
 ax31 = fig3.add_subplot(3,1,1, sharex=ax1)
 ax32 = fig3.add_subplot(3,1,2, sharex=ax31)
 ax33 = fig3.add_subplot(3,1,3, sharex=ax31)
 
-ax31.plot(ob.xg, ob.rho[i_slice, :, j_zero])
-ax32.plot(ob.xg, ob.phi[i_slice, :, j_zero])
-ax33.plot(ob.xg, ob.Ex[i_slice, :, j_zero])
+ax31.plot(ob.xg, ob.rho[i_slice, :, j_obs], '.-')
+ax32.plot(ob.xg, ob.phi[i_slice, :, j_obs],'.-')
+ax33.plot(ob.xg, ob.Ex[i_slice, :, j_obs], '.-')
+
+ax32.plot(x_tint, phi_tint,'r-')
+ax33.plot(x_tint, Ex_tint, 'r-')
 
 
 plt.show()

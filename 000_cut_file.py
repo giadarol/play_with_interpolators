@@ -4,11 +4,6 @@ import scipy.io as sio
 
 import myfilemanager as mfm
 
-try:
-    del ob
-except:
-    print('Did not manage to delete...')
-
 ob = mfm.myloadmat_to_obj('pinch_pic_data_mean2.mat')
 
 i_zero = np.argmin(np.abs(ob.xg))
@@ -26,5 +21,5 @@ dict_new_file['xg' ] = ob.xg[i_zero-N_keep_h:i_zero+N_keep_h+1]
 dict_new_file['yg' ] = ob.yg[j_zero-N_keep_v:j_zero+N_keep_v+1]
 dict_new_file['zg' ] = ob.zg
 
-
+sio.savemat('pinch_cut.mat', dict_new_file, oned_as='row')
 
