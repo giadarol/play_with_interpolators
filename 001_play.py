@@ -20,7 +20,7 @@ z_obs = ob.zg[i_slice]
 
 x_magnify = 5e-4
 y_magnify = 4.5e-4
-Dh_magnify = 2e-6
+Dh_magnify = 5e-6
 
 
 if interp2d:
@@ -94,6 +94,37 @@ for ii, (xx, yy, zz) in enumerate(zip(x_tint, y_tint, z_tint)):
     phi_tinside[ii] = tinterp_inside.val(xx, yy, zz)
     Ex_tinside[ii] = -tinterp_inside.ddx(xx, yy, zz)
 
+# Tricubic with new derivatives
+Nx,Ny,Nz = ob.phi.transpose(1,2,0)[:, :, i_slice-5:i_slice+6].shape
+A = np.zeros([Nx,Ny,Nz,8])
+
+# A[:,:,:,0] = ob.phi.transpose(1,2,0)[:, :, i_slice-5:i_slice+6]
+# 
+# for ii in range(Nx):
+#     for jj in range(Ny):
+#         for kk in range(Nz):
+#             A[ii,jj,kk,1] = tinterp_inside.ddx(ob.xg[ii], ob.yg[jj], z_obs)
+#             A[ii,jj,kk,2] = tinterp_inside.ddy(ob.xg[ii], ob.yg[jj], z_obs)
+#             A[ii,jj,kk,3] = tinterp_inside.ddz(ob.xg[ii], ob.yg[jj], z_obs)
+#             A[ii,jj,kk,4] = tinterp_inside.ddxdy(ob.xg[ii], ob.yg[jj], z_obs)
+#             A[ii,jj,kk,5] = tinterp_inside.ddxdz(ob.xg[ii], ob.yg[jj], z_obs)
+#             A[ii,jj,kk,6] = tinterp_inside.ddydz(ob.xg[ii], ob.yg[jj], z_obs)
+#             A[ii,jj,kk,7] = tinterp_inside.ddxdydz(ob.xg[ii], ob.yg[jj], z_obs)
+
+tinterp_der = ti.Tricubic_Interpolation(A=A, 
+        x0=ob.xg[0], y0=ob.yg[0], z0=ob.zg[i_slice-5],
+        dx=ob.xg[1]-ob.xg[0], dy=ob.yg[1]-ob.yg[0], dz=ob.zg[1]-ob.zg[0], method='Exact')
+
+
+phi_tder = 0.*x_tint
+Ex_tder = 0.*x_tint
+
+for ii, (xx, yy, zz) in enumerate(zip(x_tint, y_tint, z_tint)):
+    phi_tder[ii] = tinterp_der.val(xx, yy, zz)
+    Ex_tder[ii] = -tinterp_der.ddx(xx, yy, zz)
+
+
+
 # Plotting
 plt.close('all')
 ms.mystyle_arial()
@@ -127,5 +158,6 @@ ax33.plot(x_tint, Ex_tint, 'r-')
 ax33.plot(x_tint, Ex_picint, 'g--')
 ax33.plot(x_tint, Ex_inside, 'k')
 ax33.plot(x_tint, Ex_tinside, 'orange')
+ax33.plot(x_tint, Ex_tder, 'm')
 
 plt.show()
